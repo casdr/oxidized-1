@@ -1,6 +1,9 @@
 class Mtrlrfs < Oxidized::Model
+  using Refinements
+
   # Motorola RFS/Extreme WM
 
+  prompt /^([\w.@-]+\*?[#>])\s?$/
   comment  '# '
 
   cmd :all do |cfg|

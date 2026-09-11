@@ -1,13 +1,17 @@
 class QuantaOS < Oxidized::Model
-  prompt /^\((\w|\S)+\) (>|#)$/
+  using Refinements
+
+  prompt /^\(\S+\) (>|#)$/
   comment '! '
 
+  cmd :all do |cfg|
+    # Remove command echo and prompt
+    cfg.cut_both
+  end
+
   cmd 'show run' do |cfg|
-    cfg.each_line.select do |line|
-      (not line.match /^!.*$/) &&
-        (not line.match /^\((\w|\S)+\) (>|#)$/) &&
-        (not line.match /^show run$/)
-    end.join
+    # Remove commented lines
+    cfg.lines.grep_v(/^!/).join
   end
 
   cfg :telnet do
@@ -18,11 +22,7 @@ class QuantaOS < Oxidized::Model
   cfg :telnet, :ssh do
     post_login do
       send "enable\n"
-      if vars :enable
-        cmd vars(:enable)
-      else
-        cmd ""
-      end
+      cmd vars(:enable) || ""
     end
     post_login 'terminal length 0'
     pre_logout do

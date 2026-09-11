@@ -1,8 +1,10 @@
 class Nodegrid < Oxidized::Model
+  using Refinements
+
   # ZPE Nodegrid (Tested with Nodegrid Gate/Bold/NSR)
   # https://www.zpesystems.com/products/
 
-  prompt(%r{(?<!@)\[(.*?\s/)\]#})
+  prompt /(?<!@)\[(.*?\s\/)\]#/
   comment '# '
 
   cmd 'show system/about/' do |cfg|

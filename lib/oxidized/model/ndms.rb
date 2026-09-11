@@ -1,7 +1,9 @@
 class NDMS < Oxidized::Model
+  using Refinements
+
   # Pull config from Zyxel Keenetic devices from version NDMS >= 2.0
 
-  comment  '! '
+  comment '! '
 
   prompt /^([\w.@()-]+[#>]\s?)/m
 
@@ -19,5 +21,11 @@ class NDMS < Oxidized::Model
     username /^Login:/
     password /^Password:/
     pre_logout 'exit'
+  end
+
+  cmd :significant_changes do |cfg|
+    cfg.reject_lines [
+      'Last change:'
+    ]
   end
 end

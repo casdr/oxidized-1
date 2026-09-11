@@ -1,23 +1,13 @@
 class Aoscx < Oxidized::Model
-  # previous command is repeated followed by "\eE", which sometimes ends up on last line
-  # ssh switches prompt may start with \r, followed by the prompt itself, regex ([\w\s.-]+[#>] ), which ends the line
-  # telnet switchs may start with various vt100 control characters, regex (\e\[24;[0-9][hH]), follwed by the prompt, followed
-  # by at least 3 other vt100 characters
-  prompt /(^\r|\e\[24;[0-9][hH])?([\w\s.-]+[#>] )($|(\e\[24;[0-9][0-9]?[hH]){3})/
+  using Refinements
+  # HPE Aruba Networking - ArubaOS-CX models
+
+  prompt /^[\w\s.-]+[#>] $/
+  clean :escape_codes
 
   comment '! '
 
-  # replace next line control sequence with a new line
-  expect /(\e\[1M\e\[\??\d+(;\d+)*[A-Za-z]\e\[1L)|(\eE)/ do |data, re|
-    data.gsub re, "\n"
-  end
-
-  # replace all used vt100 control sequences
-  expect /\e\[\??\d+(;\d+)*[A-Za-z]/ do |data, re|
-    data.gsub re, ''
-  end
-
-  expect /Press any key to continue(\e\[\??\d+(;\d+)*[A-Za-z])*$/ do
+  expect /Press any key to continue$/ do
     send ' '
     ""
   end
@@ -28,19 +18,15 @@ class Aoscx < Oxidized::Model
   end
 
   cmd :all do |cfg|
-    cfg = cfg.cut_both
-    cfg = cfg.gsub /^\r/, ''
-    # Additional filtering for elder switches sending vt100 control chars via telnet
-    cfg.gsub! /\e\[\??\d+(;\d+)*[A-Za-z]/, ''
-    # Additional filtering for power usage reporting which obviously changes over time
-    cfg.gsub! /^(.*AC [0-9]{3}V\/?([0-9]{3}V)?) *([0-9]{1,3}) (.*)/, '\\1 <removed> \\4'
-    cfg
+    cfg.cut_both
   end
 
   cmd :secret do |cfg|
+    cfg.gsub! /^(user .* group .*(?: ciphertext)?) \S+/, '\\1 <secret hidden>'
     cfg.gsub! /^(snmp-server community) \S+(.*)/, '\\1 <secret hidden> \\2'
-    cfg.gsub! /^(snmp-server host \S+) \S+(.*)/, '\\1 <secret hidden> \\2'
-    cfg.gsub! /^(radius-server host \S+ key) \S+(.*)/, '\\1 <secret hidden> \\2'
+    cfg.gsub! /^(snmp-server host \S+ .*community) \S+(.*)/, '\\1 <secret hidden>\\2'
+    cfg.gsub! /^(snmpv3 user).*?(auth (?:md5|sha(?:\d{1,3})?) auth-pass ciphertext).*?(priv (?:des|aes(?:\d{1,3})?) priv-pass ciphertext).*/, '\\1 <user> \\2 <auth-pass> \\3 <priv-pass>'
+    cfg.gsub! /^(radius-server host \S+ key(?: ciphertext)?) \S+ (.*)/, '\\1 <secret hidden> \\2'
     cfg.gsub! /^(radius-server key).*/, '\\1 <configuration removed>'
     cfg.gsub! /^(tacacs-server host \S+ key) \S+(.*)/, '\\1 <secret hidden> \\2'
     cfg.gsub! /^(tacacs-server key).*/, '\\1 <secret hidden>'
@@ -51,11 +37,36 @@ class Aoscx < Oxidized::Model
     comment cfg
   end
 
+  def with_section(cfg, section, &block)
+    cfg.sub!(/(show environment #{section}.*?-{10,}\n)(.*?)(?=\nshow environment|\z)/m) do
+      header = ::Regexp.last_match(1)
+      content = ::Regexp.last_match(2)
+      block.call(content) if block_given?
+      header + content
+    end
+  end
+
   cmd 'show environment' do |cfg|
-    cfg.gsub! /^(LC.*\s+)\d+\s+$/, '\\1<hidden>'
-    cfg.gsub! /^(\d\/\d\/\d.*\s+)\d+\s+$/, '\\1<hidden>'
-    cfg.gsub! /^(\d+\/\S+\s+\S+\s+)\d+\.\d+\s+C(.*)/, '\\1<hidden>\\2'
-    cfg.gsub! /^(LC.*\s+)\d+\.\d+\s+(C.*)$/, '\\1 <hidden> \\2'
+    with_section(cfg, 'fan') do |content|
+      content.gsub!(/^((?:\S+ +){3})(slow  |normal|medium|fast  |max   |N\/A   ) (.*?)\d+ +$/, '\\1<speed> \\3<rpm>')
+    end
+
+    with_section(cfg, 'power-consumption') do |content|
+      content.gsub!(/^(.*?) (?:\d+\.\d+ +)+\d+\.\d+(?: +N\/A)*$/, '\\1 <power hidden>')
+      content.gsub!(/^(Total Power Consumption +)\d+\.\d+$/, '\\1<power hidden>')
+    end
+
+    with_section(cfg, 'power-allocation') do |content|
+      content.gsub!(/^(.*) \d+ W$/, '\\1 <power>')
+    end
+
+    with_section(cfg, 'power-supply input-voltage') do |content|
+      content.gsub!(/^((?:\S+ +){3}\d+-\d+ +)\d+\.\d+ +\d+\.\d+/, '\\1<voltage hidden>')
+    end
+
+    with_section(cfg, 'temperature') do |content|
+      content.gsub!(/^(.*) -?\d+\.\d+ C (.*)$/, '\\1 <hidden>\\2')
+    end
     comment cfg
   end
 
@@ -67,7 +78,10 @@ class Aoscx < Oxidized::Model
     comment cfg
   end
 
-  cmd 'show system | exclude "Up Time" | exclude "CPU" | exclude "Memory"' do |cfg|
+  cmd 'show system' do |cfg|
+    cfg = cfg.reject_lines [
+      "Up Time", "CPU", "Memory", /Pkts .x/, "Lowest", "Missed"
+    ]
     comment cfg
   end
 

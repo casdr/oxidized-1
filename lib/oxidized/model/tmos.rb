@@ -1,5 +1,7 @@
 class TMOS < Oxidized::Model
-  comment  '# '
+  using Refinements
+
+  comment '# '
 
   cmd :secret do |cfg|
     cfg.gsub!(/^([\s\t]*)secret \S+/, '\1secret <secret removed>')
@@ -30,6 +32,7 @@ class TMOS < Oxidized::Model
     cfg.gsub!(/^\s+bandwidth-bps (\d+)/, '')
     cfg.gsub!(/^\s+bandwidth-cps (\d+)/, '')
     cfg.gsub!(/^\s+bandwidth-pps (\d+)\n/, '')
+    cfg.gsub!(/^\s*\S*encrypted \S+\n/, '')
     cfg
   end
 

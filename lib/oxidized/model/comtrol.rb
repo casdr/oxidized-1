@@ -1,4 +1,6 @@
 class Comtrol < Oxidized::Model
+  using Refinements
+
   # Used in Comtrol Industrial Switches, such as RocketLinx ES8510
 
   # Typical prompt "<hostname>#"
@@ -33,7 +35,7 @@ class Comtrol < Oxidized::Model
           expect /[pP]assword:\s?$/
           send vars(:enable) + "\n"
         end
-        expect /^.+[#]\s?$/
+        expect /^.+\#\s?$/
       end
     end
     pre_logout 'exit'

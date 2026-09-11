@@ -8,8 +8,10 @@
 # set system syslog host SERVER interactive-commands notice
 # set system syslog host SERVER match "^mgd\[[0-9]+\]: UI_COMMIT: .*"
 
-# Ports < 1024 need extra privileges, use a port higher than this by setting the port option in your oxidized config file.
-# To use the default port for syslog (514) you shouldn't pass an argument, but you will need to allow this with:
+# Ports < 1024 need extra privileges, use a port higher than this by setting the
+# port option in your oxidized config file.
+# To use the default port for syslog (514) you shouldn't pass an argument, but
+# you will need to allow this with:
 # sudo setcap 'cap_net_bind_service=+ep' /usr/bin/ruby
 
 # Config options are:
@@ -29,7 +31,7 @@ require_relative 'rest_client'
 module Oxidized
   require 'asetus'
   class Config
-    Root = File.join ENV['HOME'], '.config', 'oxidized'
+    Root = File.join Dir.home, '.config', 'oxidized'
   end
 
   CFGS = Asetus.new name: 'oxidized', load: false, key_to_s: true
@@ -43,8 +45,8 @@ module Oxidized
 
   begin
     CFGS.load
-  rescue StandardError => error
-    raise InvalidConfig, "Error loading config: #{error.message}"
+  rescue StandardError => e
+    raise InvalidConfig, "Error loading config: #{e.message}"
   ensure
     CFG = CFGS.cfg # convenienence, instead of Config.cfg.password, CFG.password
   end
@@ -52,6 +54,7 @@ module Oxidized
   class SyslogMonitor
     MSG = {
       ios:   /%SYS-(SW[0-9]+-)?5-CONFIG_I:/,
+      iosxr: /%MGBL-SYS-5-CONFIG_I/,
       junos: 'UI_COMMIT:',
       eos:   /%SYS-5-CONFIG_I:/,
       nxos:  /%VSHD-5-VSHD_SYSLOG_CONFIG_I:/,
@@ -89,6 +92,7 @@ module Oxidized
       opts[:from] = log[-1][1..-2]
       opts
     end
+    alias iosxr ios
     alias nxos ios
     alias eos ios
 
@@ -105,7 +109,7 @@ module Oxidized
     end
 
     def handle_log(log, ipaddr)
-      log = log.to_s.split ' '
+      log = log.to_s.split
       index, vendor = MSG.find do |key, value|
         index = log.find_index { |e| e.match value }
         break index, key if index
@@ -116,7 +120,8 @@ module Oxidized
     def run(io)
       loop do
         log = select [io]
-        log, ip = log.first.first, nil
+        log = log.first.first
+        ip = nil
         if @mode == :udp
           log, ip = log.recvfrom_nonblock 2000
           ip = ip.last
@@ -136,7 +141,7 @@ module Oxidized
       if Oxidized::CFG.syslogd.resolve == false
         ipaddr
       else
-        name = (Resolv.getname ipaddr.to_s rescue ipaddr)
+        name = (Resolv.getname ipaddr.to_s rescue ipaddr) # rubocop:disable Style/RedundantParentheses
         Oxidized::CFG.syslogd.dns_map.each { |re, sub| name.sub! Regexp.new(re.to_s), sub }
         name
       end

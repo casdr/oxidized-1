@@ -1,5 +1,11 @@
+require 'semantic_logger'
+require_relative 'cli/support'
+
 module Oxidized
   class CLI
+    include SemanticLogger::Loggable
+    include Support
+
     require 'slop'
     require 'oxidized'
     require 'English'
@@ -9,10 +15,10 @@ module Oxidized
       Process.daemon if @opts[:daemonize]
       write_pid
       begin
-        Oxidized.logger.info "Oxidized starting, running as pid #{$PROCESS_ID}"
+        logger.info "Oxidized starting, running as pid #{$PROCESS_ID}"
         Oxidized.new
-      rescue StandardError => error
-        crash error
+      rescue StandardError => e
+        crash e
         raise
       end
     end
@@ -23,14 +29,14 @@ module Oxidized
       _args, @opts = parse_opts
 
       Config.load(@opts)
-      Oxidized.setup_logger
+      Oxidized::Logger.setup
 
       @pidfile = File.expand_path(Oxidized.config.pid)
     end
 
     def crash(error)
-      Oxidized.logger.fatal "Oxidized crashed, crashfile written in #{Config::Crash}"
-      File.open Config::Crash, 'w' do |file|
+      logger.fatal "Oxidized crashed, crashfile written in #{Config::CRASH}"
+      File.open Config::CRASH, 'w' do |file|
         file.puts '-' * 50
         file.puts Time.now.utc
         file.puts error.message + ' [' + error.class.to_s + ']'
@@ -44,6 +50,9 @@ module Oxidized
       opts = Slop.parse do |opt|
         opt.on '-d', '--debug', 'turn on debugging'
         opt.on '--daemonize', 'Daemonize/fork the process'
+        opt.on '--support', 'show support diagnostics and exit'
+        opt.string '--home-dir', 'Oxidized home dir', default: nil
+        opt.string '--config-file', 'Oxidized config file', default: nil
         opt.on '-h', '--help', 'show usage' do
           puts opt
           exit
@@ -58,6 +67,12 @@ module Oxidized
           Kernel.exit
         end
       end
+
+      if opts[:support]
+        show_support_details
+        Kernel.exit
+      end
+
       [opts.arguments, opts]
     end
 
@@ -72,7 +87,7 @@ module Oxidized
 
       begin
         File.open(pidfile, ::File::CREAT | ::File::EXCL | ::File::WRONLY) { |f| f.write(Process.pid.to_s) }
-        at_exit { File.delete(pidfile) if File.exist?(pidfile) }
+        at_exit { FileUtils.rm_f(pidfile) }
       rescue Errno::EEXIST
         check_pid
         retry

@@ -1,10 +1,12 @@
 class SROS < Oxidized::Model
+  using Refinements
+
   #
   # Nokia SR OS (TiMOS) (formerly TiMetra, Alcatel, Alcatel-Lucent).
   # Used in 7705 SAR, 7210 SAS, 7450 ESS, 7750 SR, 7950 XRS, and NSP.
   #
 
-  comment  '# '
+  comment '# '
 
   prompt /^([-\w.:>*]+\s?[#>]\s?)$/
 
@@ -30,7 +32,7 @@ class SROS < Oxidized::Model
     #
     # Strip uptime.
     #
-    cfg.sub! /^System Up Time.*\n/, ''
+    cfg.gsub! /^System Up Time.*$/, ''
     comment cfg
   end
 
@@ -73,14 +75,14 @@ class SROS < Oxidized::Model
   #
   # Show the running persistent indices.
   #
-  cmd 'admin display-config index' do |cfg|
+  cmd "admin display-config index\n" do |cfg|
     comment cfg
   end
 
   #
   # Show the running configuration.
   #
-  cmd 'admin display-config' do |cfg|
+  cmd "admin display-config\n" do |cfg|
     cfg
   end
 

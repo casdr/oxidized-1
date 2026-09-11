@@ -1,9 +1,11 @@
 class VOLTAIRE < Oxidized::Model
+  using Refinements
+
   prompt /([\w.@()-\[:\s\]]+[#>]\s|(One or more tests have failed.*))$/
   comment '## '
 
   # Pager Handling
-  expect /.+lines\s\d+-\d+([\s]|\/\d+\s\(END\)\s).+$/ do |data, re|
+  expect /.+lines\s\d+-\d+(\s|\/\d+\s\(END\)\s).+$/ do |data, re|
     send ' '
     data.sub re, ''
   end

@@ -1,5 +1,7 @@
 module Oxidized
   class Model
+    using Refinements
+
     class Outputs
       def to_cfg
         type_to_str(nil)
@@ -27,6 +29,11 @@ module Oxidized
 
       def types
         @outputs.map { |out| out.type }.uniq.compact
+      end
+
+      def merge!(other)
+        other.all.each { |o| @outputs << o }
+        self
       end
 
       private

@@ -1,4 +1,6 @@
 class EOS < Oxidized::Model
+  using Refinements
+
   # Arista EOS model #
 
   prompt /^.+[#>]$/
@@ -11,12 +13,15 @@ class EOS < Oxidized::Model
 
   cmd :secret do |cfg|
     cfg.gsub! /^(snmp-server community).*/, '\\1 <configuration removed>'
+    cfg.gsub! /^(snmp-server host \S+( vrf \S+)?( informs?| traps?)?( version (1|2c|3 (?:noauth|auth|priv)))?) \S+(.*)/, '\\1 <secret hidden>\\6'
     cfg.gsub! /(secret \w+) (\S+).*/, '\\1 <secret hidden>'
     cfg.gsub! /(password \d+) (\S+).*/, '\\1 <secret hidden>'
-    cfg.gsub! /^(enable secret).*/, '\\1 <configuration removed>'
+    cfg.gsub! /^(enable (?:secret|password)).*/, '\\1 <configuration removed>'
     cfg.gsub! /^(service unsupported-transceiver).*/, '\\1 <license key removed>'
     cfg.gsub! /^(tacacs-server key \d+).*/, '\\1 <configuration removed>'
+    cfg.gsub! /^(radius-server .+ key \d) \S+/, '\\1 <radius secret hidden>'
     cfg.gsub! /( {6}key) (\h+ 7) (\h+).*/, '\\1 <secret hidden>'
+    cfg.gsub! /(localized|auth (md5|sha\d{0,3})|priv (des|aes\d{0,3})) \S+/, '\\1 <secret hidden>'
     cfg
   end
 

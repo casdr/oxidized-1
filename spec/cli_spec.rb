@@ -1,4 +1,4 @@
-require 'spec_helper'
+require_relative 'spec_helper'
 require 'oxidized/cli'
 
 describe Oxidized::CLI do
@@ -17,7 +17,7 @@ describe Oxidized::CLI do
 
       it 'prints the version and exits' do
         Oxidized::Config.expects(:load)
-        Oxidized.expects(:setup_logger)
+        Oxidized::Logger.expects(:setup)
         File.expects(:expand_path)
         Kernel.expects(:exit)
 

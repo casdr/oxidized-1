@@ -1,4 +1,6 @@
 class TPLink < Oxidized::Model
+  using Refinements
+
   # tp-link prompt
   prompt /^\r?([\w.@()-]+[#>]\s?)$/
   comment '! '
@@ -46,22 +48,22 @@ class TPLink < Oxidized::Model
     lines[0..lines.index("end\n")].join
   end
 
+  macro :enable, regex: /^[pP]assword:/
+
   cfg :telnet, :ssh do
     username /^User ?[nN]ame:/
     password /^\r?Password:/
+    newline "\r\n"
   end
 
   cfg :telnet, :ssh do
-    if vars :enable
-      post_login do
-        send "enable\r"
-        cmd vars(:enable)
-      end
+    post_login do
+      cmd 'terminal length 0'
     end
 
     pre_logout do
-      send "exit\r"
-      send "logout\r"
+      send "exit\r\n"
+      send "logout\r\n"
     end
   end
 end

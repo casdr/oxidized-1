@@ -5,13 +5,13 @@ module Oxidized
     attr_accessor :interval, :max, :want
 
     def initialize(max, use_max_threads, interval, nodes)
-      @max       = max
+      @max = max
       @use_max_threads = use_max_threads
       # Set interval to 1 if interval is 0 (=disabled) so we don't break
       # the 'ceil' function
-      @interval  = interval.zero? ? 1 : interval
-      @nodes     = nodes
-      @last      = Time.now.utc
+      @interval = interval.zero? ? 1 : interval
+      @nodes = nodes
+      @last = Time.now.utc
       @durations = Array.new @nodes.size, AVERAGE_DURATION
       duration AVERAGE_DURATION
       super()
@@ -34,14 +34,22 @@ module Oxidized
     end
 
     def new_count
-      if @use_max_threads
-        @want = @max
-      else
-        @want = ((@nodes.size * @duration) / @interval).ceil
-      end
+      @want = if @use_max_threads
+                @max
+              else
+                ((@nodes.size * @duration) / @interval).ceil
+              end
       @want = 1 if @want < 1
       @want = @nodes.size if @want > @nodes.size
       @want = @max if @want > @max
+    end
+
+    def increment
+      # Increments the job count if safe to do so, which means:
+      # a) less threads running than the total amount of nodes
+      # b) we want less than the max specified number of threads
+
+      @want = [(@want + 1), @nodes.size, @max].min
     end
 
     def work
@@ -51,7 +59,9 @@ module Oxidized
       # then we want one more thread (rationale is to fix hanging thread causing HOLB)
       return unless @want <= size && @want < @nodes.size
 
-      @want += 1 if (Time.now.utc - @last) > MAX_INTER_JOB_GAP
+      return unless @want <= size
+
+      increment if (Time.now.utc - @last) > MAX_INTER_JOB_GAP
     end
   end
 end

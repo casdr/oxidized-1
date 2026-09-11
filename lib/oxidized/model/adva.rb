@@ -4,7 +4,9 @@
 # for the user that is used to fetch the configuration.
 
 class ADVA < Oxidized::Model
-  prompt /\w+\-+[#>]\s?$/
+  using Refinements
+
+  prompt /\w+-+[#>]\s?$/
   comment '# '
 
   cmd :secret do |cfg|
@@ -16,7 +18,7 @@ class ADVA < Oxidized::Model
     cfg.cut_both
   end
 
-  cmd 'show running-config current' do |cfg|
+  cmd 'show running-config delta' do |cfg|
     cfg.each_line.reject { |line| line.match /^Preparing configuration file.*/ }.join
   end
 
@@ -42,7 +44,7 @@ class ADVA < Oxidized::Model
 
     cmd 'show ports' do |cfg|
       cfg.each_line do |line|
-        port = line.match(/\|((access|network)[^\|]+)\|/)
+        port = line.match(/\|((access|network)[^|]+)\|/)
         ports << port if port
       end
     end
@@ -50,11 +52,11 @@ class ADVA < Oxidized::Model
     ports.each do |port|
       port_command = 'show ' + port[2] + '-port ' + port[1]
 
-      ports_output << cmd(port_command) { |cfg|
+      ports_output << cmd(port_command) do |cfg|
         cfg = "COMMAND: " + port_command + "\n\n" + cfg
         cfg = comment cfg
         "\n\n" + cfg
-      }
+      end
     end
 
     ports_output

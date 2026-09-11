@@ -1,4 +1,6 @@
 class ZyNOSCLI < Oxidized::Model
+  using Refinements
+
   # Used in Zyxel DSLAMs, such as SAM1316
 
   # Typical prompt "XGS4600#"
@@ -28,7 +30,7 @@ class ZyNOSCLI < Oxidized::Model
           expect /[pP]assword:\s?$/
           send vars(:enable) + "\n"
         end
-        expect /^.+[#]$/
+        expect /^.+\#$/
       end
     end
     pre_logout 'exit'

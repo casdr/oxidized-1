@@ -1,8 +1,9 @@
 class Dlink < Oxidized::Model
-  # D-LINK Switches
-  # Add support dgs 1100 series (tested only with dgs-1100-10/me)
+  using Refinements
 
-  prompt /^(\r*[\w\s.@()\/:-]+[#>]\s?)$/
+  # D-LINK Switches
+
+  prompt /[\w.@()\/:-]+[#>]\s?$/
   comment '# '
 
   cmd :secret do |cfg|
@@ -17,6 +18,9 @@ class Dlink < Oxidized::Model
 
   cmd 'show switch' do |cfg|
     cfg.gsub! /^System Uptime\s.+/, '' # Omit constantly changing uptime info
+    cfg.gsub! /^System up time\s.+/, '' # Omit constantly changing uptime info
+    cfg.gsub! /^System Time\s.+/, '' # Omit constantly changing uptime info
+    cfg.gsub! /^RTC Time\s.+/, '' # Omit constantly changing uptime info
     comment cfg
   end
 
@@ -33,6 +37,7 @@ class Dlink < Oxidized::Model
 
   cfg :telnet, :ssh do
     post_login 'disable clipaging'
+    post_login 'enable admin' if vars(:enable) == true
     pre_logout 'logout'
   end
 end

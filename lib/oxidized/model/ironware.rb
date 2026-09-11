@@ -1,4 +1,6 @@
 class IronWare < Oxidized::Model
+  using Refinements
+
   prompt /^.*(telnet|ssh)@.+[>#]\s?$/i
   comment  '! '
 
@@ -20,9 +22,11 @@ class IronWare < Oxidized::Model
   end
 
   cmd 'show version' do |cfg|
-    cfg.gsub! /(^((.*)[Ss]ystem uptime(.*))$)/, '' # remove unwanted line system uptime
-    cfg.gsub! /(^((.*)[Tt]he system started at(.*))$)/, ''
-    cfg.gsub! /[Uu]p\s?[Tt]ime is .*/, ''
+    cfg = cfg.reject_lines [
+      /(^((.*)[Ss]ystem uptime(.*))$)/,
+      /(^((.*)[Tt]he system started at(.*))$)/,
+      /[Uu]p\s?[Tt]ime is .*/
+    ]
 
     comment cfg
   end
@@ -34,8 +38,8 @@ class IronWare < Oxidized::Model
     cfg.gsub! /current speed is [A-Z-]{2,6} \(\d{2,3}%\)/, ''
     cfg.gsub! /Fan \d* - STATUS: OK \D*\d*./, '' # Fix for ADX Fan speed reporting
     cfg.gsub! /\d* deg C/, '' # Fix for ADX temperature reporting
-    cfg.gsub! /([\[]*)1([\]]*)<->([\[]*)2([\]]*)(<->([\[]*)3([\]]*))*/, ''
-    cfg.gsub! /\d{2}\.\d deg-C/, 'XX.X deg-C'
+    cfg.gsub! /(\[*)1(\]*)<->(\[*)2(\]*)(<->(\[*)3(\]*))*/, ''
+    cfg.gsub! /\d+\.\d deg-C/, 'XX.X deg-C'
     if cfg.include? "TEMPERATURE"
       sc = StringScanner.new cfg
       out = ''
@@ -75,9 +79,13 @@ class IronWare < Oxidized::Model
   # handle pager with enable
   cfg :telnet, :ssh do
     if vars :enable
-      post_login do
-        send "enable\r\n"
-        cmd vars(:enable)
+      if vars(:enable).is_a? TrueClass
+        post_login 'enable'
+      else
+        post_login do
+          send "enable\r\n"
+          cmd vars(:enable)
+        end
       end
     end
     post_login ''

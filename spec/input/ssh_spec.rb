@@ -1,15 +1,15 @@
-require 'spec_helper'
+require_relative '../spec_helper'
 require 'oxidized/input/ssh'
 
 describe Oxidized::SSH do
   before(:each) do
     Oxidized.asetus = Asetus.new
-    Oxidized.setup_logger
     Oxidized.config.timeout = 30
     Oxidized.config.input.ssh.secure = true
     Oxidized::Node.any_instance.stubs(:resolve_repo)
     Oxidized::Node.any_instance.stubs(:resolve_input)
     Oxidized::Node.any_instance.stubs(:resolve_output)
+    Resolv.any_instance.stubs(:getaddress).with('example.com').returns('192.0.2.2')
   end
 
   describe "#connect" do
@@ -21,7 +21,7 @@ describe Oxidized::SSH do
                                  model:    'junos',
                                  username: 'alma',
                                  password: 'armud',
-                                 vars:     { ssh_proxy: 'test.com' })
+                                 vars:     { "ssh_proxy" => 'test.com' })
 
       ssh = Oxidized::SSH.new
 
@@ -31,15 +31,21 @@ describe Oxidized::SSH do
 
       proxy = mock
       Net::SSH::Proxy::Command.expects(:new).with("ssh test.com -W [%h]:%p").returns(proxy)
-      Net::SSH.expects(:start).with('93.184.216.34', 'alma',  port:                             22,
-                                                              verify_host_key:                  Oxidized.config.input.ssh.secure ? :always : :never,
-                                                              append_all_supported_algorithms:  true,
-                                                              keepalive:                        true,
-                                                              password:                         'armud',
-                                                              timeout:                          Oxidized.config.timeout,
-                                                              number_of_password_prompts:       0,
-                                                              auth_methods:                     %w[none publickey password],
-                                                              proxy:                            proxy)
+      ssh_options = {
+        port:                            22,
+        verify_host_key:                 Oxidized.config.input.ssh.secure ? :always : :never,
+        append_all_supported_algorithms: true,
+        keepalive:                       true,
+        forward_agent:                   false,
+        password:                        'armud',
+        timeout:                         Oxidized.config.timeout,
+        number_of_password_prompts:      0,
+        auth_methods:                    %w[none publickey password],
+        proxy:                           proxy,
+        logger:                          anything,
+        max_win_size:                    2 * 1024 * 1024
+      }
+      Net::SSH.expects(:start).with('192.0.2.2', 'alma', ssh_options)
 
       ssh.instance_variable_set("@exec", true)
       ssh.connect(@node)
@@ -53,7 +59,7 @@ describe Oxidized::SSH do
                                  model:    'junos',
                                  username: 'alma',
                                  password: 'armud',
-                                 vars:     { ssh_proxy: 'test.com' })
+                                 vars:     { "ssh_proxy" => 'test.com' })
 
       ssh = Oxidized::SSH.new
 
@@ -63,18 +69,84 @@ describe Oxidized::SSH do
 
       proxy = mock
       Net::SSH::Proxy::Command.expects(:new).with("ssh test.com -W [%h]:%p").returns(proxy)
-      Net::SSH.expects(:start).with('example.com', 'alma',  port:                             22,
-                                                            verify_host_key:                  Oxidized.config.input.ssh.secure ? :always : :never,
-                                                            append_all_supported_algorithms:  true,
-                                                            keepalive:                        true,
-                                                            password:                         'armud',
-                                                            timeout:                          Oxidized.config.timeout,
-                                                            number_of_password_prompts:       0,
-                                                            auth_methods:                     %w[none publickey password],
-                                                            proxy:                            proxy)
+      ssh_options = {
+        port:                            22,
+        verify_host_key:                 Oxidized.config.input.ssh.secure ? :always : :never,
+        append_all_supported_algorithms: true,
+        keepalive:                       true,
+        forward_agent:                   false,
+        password:                        'armud',
+        timeout:                         Oxidized.config.timeout,
+        number_of_password_prompts:      0,
+        auth_methods:                    %w[none publickey password],
+        proxy:                           proxy,
+        logger:                          anything,
+        max_win_size:                    2 * 1024 * 1024
+      }
+      Net::SSH.expects(:start).with('example.com', 'alma', ssh_options)
 
       ssh.instance_variable_set("@exec", true)
       ssh.connect(@node)
+    end
+  end
+
+  describe ".rescue_fail" do
+    it "returns RESCUE_FAIL from Oxidized::Input" do
+      result = Oxidized::SSH.rescue_fail
+
+      _(result[Errno::ECONNREFUSED]).must_equal :debug
+      _(result[IOError]).must_equal :warn
+      _(result[Timeout::Error]).must_equal :warn
+      _(result[Errno::ECONNRESET]).must_equal :warn
+    end
+    it "returns its own RESCUE_FAIL" do
+      result = Oxidized::SSH.rescue_fail
+
+      # Check that SSH-specific exceptions are included
+      _(result[Net::SSH::Disconnect]).must_equal :debug
+      _(result[RuntimeError]).must_equal :warn
+      _(result[Net::SSH::AuthenticationFailed]).must_equal :warn
+    end
+  end
+  describe '#config_name' do
+    it "returns the configuration name" do
+      ssh = Oxidized::SSH.new
+      _(ssh.config_name).must_equal 'ssh'
+    end
+  end
+
+  describe '#cmd' do
+    before(:each) do
+      @ssh = Oxidized::SSH.new
+      @node = Oxidized::Node.new(name:     'test.example.com',
+                                 input:    'ssh',
+                                 output:   'git',
+                                 model:    'junos',
+                                 username: 'admin',
+                                 password: 'password')
+      @ssh.instance_variable_set("@node", @node)
+    end
+
+    it "accepts a String command" do
+      @ssh.instance_variable_set("@exec", true)
+      mock_ssh = mock('Net::SSH')
+      @ssh.instance_variable_set("@ssh", mock_ssh)
+
+      mock_ssh.expects(:exec!).with("show version").returns("version output")
+
+      result = @ssh.cmd("show version")
+      _(result).must_equal "version output"
+    end
+
+    it "logs an error and raises ArgumentError when cmd is not a String" do
+      @ssh.logger.expects(:error).with(
+        'cmd must be a String (NilClass): nil @ test.example.com'
+      )
+      _(proc { @ssh.cmd(nil) }).must_raise ArgumentError
+      @ssh.logger.expects(:error).with(
+        'cmd must be a String (Integer): 123 @ test.example.com'
+      )
+      _(proc { @ssh.cmd(123) }).must_raise ArgumentError
     end
   end
 end
